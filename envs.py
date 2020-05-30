@@ -8,16 +8,18 @@ def make(env_name, num, seed = 1000, stochastic=True):
     env = None
     if env_name == "DartHopperPT-v1" and num == 2:
         env = make_env(env_name, [0,5], seed)
-    if env_name == "DartHopperPT-v1" and num == 5:
+    elif env_name == "DartHopperPT-v1" and num == 5:
         env = make_env(env_name, [0,1,2,5,9], seed)
-    if env_name == "DartHopperPT-v1" and num == 10:
+    elif env_name == "DartHopperPT-v1" and num == 10:
         env = make_env(env_name, [0,1,2,3,4,5, 6,7,8, 9], seed)
-    if env_name == "DartWalker2dPT-v1" and num == 8:
+    elif env_name == "DartWalker2dPT-v1" and num == 8:
         env = make_env(env_name, [7,8,9,10,11,12, 13,14], seed)
-    if env_name == "DartWalker2dPT-v1" and num == 15:
+    elif env_name == "DartWalker2dPT-v1" and num == 15:
         env = make_env(env_name, [0,1,2,3,4,5,6,7,8,9,10,11,12, 13,14], seed)
-    if env_name == "DartHalfCheetahPT-v1" and num == 8:
+    elif env_name == "DartHalfCheetahPT-v1" and num == 8:
         env = make_env(env_name, [0,1,2,3,4,5,6,7], seed)
+    else:
+        raise NotImplementedError(f"{env_name} and num={num} is not implemented")
     if not stochastic:
         env.env.noisy_input = stochastic
     return env

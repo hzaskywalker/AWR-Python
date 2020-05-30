@@ -8,8 +8,10 @@ from utils import DataParallel
 def get_state(env):
     return np.append(env.state_vector(), [env._elapsed_steps])
 
+
 def get_params(env):
     return env.env.param_manager.get_simulator_parameters()
+
 
 def set_state(env, state, param=None):
     if param is not None:
@@ -55,6 +57,7 @@ class Rollout:
             rewards.append(reward)
             batch_idx += 1
         return np.array(rewards), np.array(obs), np.array(mask)
+
 
 def make_parallel(num_proc, env_name, num, stochastic=False):
     return DataParallel(num_proc, Rollout, make, env_name, num, stochastic)

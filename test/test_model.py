@@ -36,10 +36,8 @@ def test_model():
 
     for i in range(3):
         obs, _, done, _ = env2.step(a[-1][i])
-        print(obs)
         if done:
             break
-
 
     for i in tqdm.trange(1):
         r, obs, mask = env(params, s, a)
