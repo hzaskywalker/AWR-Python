@@ -41,14 +41,6 @@ class CEMOSI:
 
         reward, obs, mask = self.model(params, states, actions)
         obs = obs.reshape(n_param, n_traj, *obs.shape[-2:])
-        """
-        print(obs.shape)
-        print(actions[0, :10])
-        print(np.array(self.obs).shape)
-        print(obs[0, 0, :10])
-        print(np.array(self.obs)[0, :10])
-        print(error)
-        """
         error = np.linalg.norm((obs - np.array(self.obs)[None,:])**2, axis=-1).sum(axis=(1, 2)) 
 
         if negative_mask.any():
