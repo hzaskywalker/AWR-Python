@@ -8,10 +8,11 @@ from utils import DataParallel
 def get_state(env):
     return np.append(env.state_vector(), [env._elapsed_steps])
 
-
 def get_params(env):
     return env.env.param_manager.get_simulator_parameters()
 
+def set_params(env, param):
+    env.env.param_manager.set_simulator_parameters(param)
 
 def set_state(env, state, param=None):
     if param is not None:
@@ -44,6 +45,8 @@ class Rollout:
             reward = 0
 
             for idx, action in enumerate(a):
+                if action.max() < -10000:
+                    break
                 s, r, done, _ = self.env.step(action)
                 if obs is None:
                     obs = np.zeros((batch_size, len(a), len(s)))

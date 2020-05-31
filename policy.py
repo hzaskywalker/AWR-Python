@@ -1,9 +1,13 @@
+# policy has the following api
+#   - reset
+#   - set param: update the current understanding about the environment
+#   - __call__: return the action
 import torch
 import numpy as np
 import argparse
 from optim import RolloutCEM
 from evaluation import eval_policy
-from networks import get_td3_value
+from networks import get_td3_value, get_up_network
 from model import make_parallel, make, get_params
 
 
@@ -52,11 +56,11 @@ def add_parser(parser):
     parser.add_argument('--env_name', type=str, default='DartHopperPT-v1')
     parser.add_argument('--iter_num', type=int, default=5)
     parser.add_argument('--initial_iter', type=int, default=0)
-    parser.add_argument('--num_mutation', type=int, default=100)
-    parser.add_argument('--num_elite', type=int, default=20)
+    parser.add_argument('--num_mutation', type=int, default=200)
+    parser.add_argument('--num_elite', type=int, default=10)
     parser.add_argument('--std', type=float, default=0.5)
-    parser.add_argument('--horizon', type=int, default=60)
-    parser.add_argument('--num_proc', type=int, default=15)
+    parser.add_argument('--horizon', type=int, default=50)
+    parser.add_argument('--num_proc', type=int, default=30)
     parser.add_argument('--video_num', type=int, default=1)
     parser.add_argument('--video_path', type=str, default='video{}.avi')
     parser.add_argument('--output_path', type=str, default='tmp.json')
@@ -66,9 +70,11 @@ def add_parser(parser):
     parser.add_argument('--controller', type=str, default='cem', choices=['cem', 'poplin'])
 
 
-def test():
-    env_name = 'DartWalker2dPT-v1'
-    num = 8
+def test_POLO():
+    #env_name = 'DartWalker2dPT-v1'
+    #num = 8
+    env_name = 'DartHopperPT-v1'
+    num = 5
 
     value_net = get_td3_value(env_name)
 
@@ -78,7 +84,7 @@ def test():
 
 
     model = make_parallel(args.num_proc, env_name, num=num, stochastic=True)
-    env = make(env_name, num=num)
+    env = make(env_name, num=num, resample_MP=True)
 
     controller = POLO(value_net, model, action_space=env.action_space,
                             add_actions=args.add_actions,
@@ -87,8 +93,18 @@ def test():
                             initial_iter=args.initial_iter,
                             num_mutation=args.num_mutation, num_elite=args.num_elite, alpha=0.1, trunc_norm=True, lower_bound=env.action_space.low, upper_bound=env.action_space.high)
 
-    controller.set_params(get_params(env))
-    trajectories = eval_policy(controller, env, args.num_test, args.video_num, args.video_path, timestep=args.timestep)
+    trajectories = eval_policy(controller, env, 10, args.video_num, args.video_path, timestep=args.timestep, set_gt_params=True, print_timestep=1)
+
+def test_UP():
+    env_name = 'DartHopperPT-v1'
+    num = 5
+
+    policy_net = get_up_network(env_name, num)
+
+    env = make(env_name, num=num, resample_MP=True)
+    eval_policy(policy_net, env, 10, 0, None, timestep=1000, use_state=False, set_gt_params=True)
+
 
 if __name__ == '__main__':
-    test()
+    test_POLO()
+    #test_UP()

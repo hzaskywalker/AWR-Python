@@ -4,7 +4,7 @@ sys.path.append('PT/')
 import policy_transfer.envs
 
 
-def make(env_name, num, seed = 1000, stochastic=True):
+def make(env_name, num, seed = 1000, stochastic=True, resample_MP=False):
     env = None
     if env_name == "DartHopperPT-v1" and num == 2:
         env = make_env(env_name, [0,5], seed)
@@ -20,8 +20,8 @@ def make(env_name, num, seed = 1000, stochastic=True):
         env = make_env(env_name, [0,1,2,3,4,5,6,7], seed)
     else:
         raise NotImplementedError(f"{env_name} and num={num} is not implemented")
-    if not stochastic:
-        env.env.noisy_input = stochastic
+    env.env.noisy_input = stochastic
+    env.env.resample_MP = resample_MP
     return env
     
 

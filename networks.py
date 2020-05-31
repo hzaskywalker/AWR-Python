@@ -1,4 +1,5 @@
 import torch
+import numpy as np
 
 class Value:
     def __init__(self, policy):
@@ -33,3 +34,49 @@ def get_td3_value(env_name):
     policy.actor_target.to(torch.device("cuda"))
     policy.critic_target.to(torch.device("cuda"))
     return Value(policy)
+
+
+class UP:
+    def __init__(self, actor_critic, ob_rms):
+        self.actor_critic = actor_critic
+        self.ob_rms = ob_rms
+        self.device = 'cuda:0'
+        self.params = None
+
+    def reset(self):
+        self.hidden = torch.zeros(
+            1, self.actor_critic.recurrent_hidden_state_size, device=self.device)
+        self.mask = torch.zeros(1, 1, device=self.device)
+
+    def set_params(self, params):
+        self.params = params
+
+    def __call__(self, ob):
+        assert self.params is not None
+        ob = np.concatenate((ob, self.params))
+        ob = torch.tensor([np.clip((ob - self.ob_rms.mean) / np.sqrt(self.ob_rms.var + 1e-08), -10.0, 10.0)], dtype=torch.float32, device=self.device)
+
+        _, action, _, self.hidden_state = self.actor_critic.act(ob, self.hidden, self.mask, deterministic=True)
+        return action.detach().cpu().numpy()[0]
+
+
+def get_up_network(env_name, num):
+    import sys
+    import os
+    
+    sys.path.append(os.path.join(os.path.abspath(os.path.dirname(__file__)), 'PT/policy_transfer/uposi'))
+    sys.path.append(os.path.join(os.path.abspath(os.path.dirname(__file__)), 'PT/baselines'))
+    from a2c_ppo_acktr import algo, utils
+    from a2c_ppo_acktr.algo import gail
+    from a2c_ppo_acktr.arguments import get_args
+    from a2c_ppo_acktr.envs import make_vec_envs
+    from a2c_ppo_acktr.model import Policy
+    from a2c_ppo_acktr.storage import RolloutStorage
+    env_name = env_name[:-5]
+    path = f"/home/hza/policy_transfer/PT/trained_models/ppo/UP_{env_name}_{num}.pt"
+    result = torch.load(path, map_location=lambda a, b:torch.Storage().cuda())
+
+    actor_critic = result[0]
+    actor_critic.cuda()
+    ob_rms = result[1]
+    return UP(actor_critic, ob_rms)
