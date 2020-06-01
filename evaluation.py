@@ -26,7 +26,7 @@ def eval_policy(policy, eval_env, eval_episodes=10, save_video=0, video_path="vi
         actions = []
         for i in tqdm.trange(timestep):
             if i % print_timestep == print_timestep-1:
-                print('\n\n', avg_reward, '\n\n')
+                print('\n\n', avg_reward, "past: ", rewards, '\n\n')
 
             if use_state:
                 state = get_state(eval_env)
@@ -55,7 +55,7 @@ def eval_policy(policy, eval_env, eval_episodes=10, save_video=0, video_path="vi
     return trajectories, rewards
 
 
-def collect_trajectories(eval_env, policy, num_traj, max_horizon, use_state, use_done=True):
+def collect_trajectories(eval_env, policy, num_traj, max_horizon, use_state, use_done=True, random_policy=True):
     gt_params = get_params(eval_env)
 
     for i in range(num_traj):
@@ -73,7 +73,7 @@ def collect_trajectories(eval_env, policy, num_traj, max_horizon, use_state, use
         policy.reset()
         for j in range(max_horizon):
             action = policy(obs)
-            if np.random.random() > 0: # explore
+            if np.random.random() > 0 and random_policy: # explore
                 action = eval_env.action_space.sample()
             obs, _, done, _ = eval_env.step(action)
 
@@ -100,7 +100,7 @@ def collect_trajectories(eval_env, policy, num_traj, max_horizon, use_state, use
         yield init_state, observations, actions, masks
 
 
-def osi_eval(eval_env, osi, policy, num_init_traj, max_horizon, eval_episodes, use_state=True, print_timestep=1000):
+def osi_eval(eval_env, osi, policy, num_init_traj, max_horizon, eval_episodes, use_state=True, print_timestep=1000, resample_MP=True):
 
 
     resample_MP_init = eval_env.env.resample_MP
@@ -108,7 +108,7 @@ def osi_eval(eval_env, osi, policy, num_init_traj, max_horizon, eval_episodes, u
     for episode in range(eval_episodes):
         osi.reset()
 
-        eval_env.env.resample_MP = True
+        eval_env.env.resample_MP = resample_MP
         eval_env.reset()
         eval_env.env.resample_MP = False
 
@@ -118,7 +118,8 @@ def osi_eval(eval_env, osi, policy, num_init_traj, max_horizon, eval_episodes, u
         params = osi.get_params()
         policy.set_params(params)
 
-        rewards += eval_policy(policy, eval_env, eval_episodes=1, use_state=use_state, set_gt_params=False)[1]
+        rewards += eval_policy(policy, eval_env, eval_episodes=1, use_state=use_state, set_gt_params=False, timestep=1000, print_timestep=print_timestep)[1]
+        print(get_params(eval_env), params)
 
     mean, std = np.mean(rewards), np.std(rewards)
     print('mean, std', mean, std)

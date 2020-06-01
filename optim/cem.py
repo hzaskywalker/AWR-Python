@@ -63,6 +63,8 @@ class CEM:
 
                 mean = mean * self.alpha + elite.mean(dim=0) * (1 - self.alpha)
                 std = ((std ** 2) * self.alpha + (elite.std(dim=0, unbiased=False) ** 2) * (1 - self.alpha)) ** 0.5
+
+        self.loss = reward.index_select(0, topk_idx).mean()
         if not return_std:
             return mean
         return mean, std

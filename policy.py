@@ -46,7 +46,9 @@ class POLO(RolloutCEM):
             obs = torch.tensor(obs.reshape(-1, obs.shape[-1]), device='cuda:0', dtype=torch.float)
 
             values = self.value_net(obs, params).reshape(*a.shape[:2])
-            r = (values * mask).sum(dim=-1)
+            #r = r + (values * mask).sum(dim=-1) * 0.0
+            #r = r
+            r = r + (values * mask).sum(dim=-1) * 0.01
         else:
             r -= ((1-mask) * 2).sum(dim=-1)
 
@@ -58,8 +60,8 @@ def add_parser(parser):
     parser.add_argument('--env_name', type=str, default='DartHopperPT-v1')
     parser.add_argument('--iter_num', type=int, default=2)
     parser.add_argument('--initial_iter', type=int, default=0)
-    parser.add_argument('--num_mutation', type=int, default=200)
-    parser.add_argument('--num_elite', type=int, default=10)
+    parser.add_argument('--num_mutation', type=int, default=100)
+    parser.add_argument('--num_elite', type=int, default=5)
     parser.add_argument('--std', type=float, default=0.5)
     parser.add_argument('--horizon', type=int, default=50)
     parser.add_argument('--num_proc', type=int, default=30)
@@ -87,7 +89,7 @@ def test_POLO():
 
 
     model = make_parallel(args.num_proc, env_name, num=num, stochastic=True)
-    env = make(env_name, num=num, resample_MP=True)
+    env = make(env_name, num=num, resample_MP=False)
 
     controller = POLO(value_net, model, action_space=env.action_space,
                             add_actions=args.add_actions,
@@ -96,7 +98,7 @@ def test_POLO():
                             initial_iter=args.initial_iter,
                             num_mutation=args.num_mutation, num_elite=args.num_elite, alpha=0.1, trunc_norm=True, lower_bound=env.action_space.low, upper_bound=env.action_space.high)
 
-    trajectories = eval_policy(controller, env, 10, args.video_num, args.video_path, timestep=args.timestep, set_gt_params=True, print_timestep=1)
+    trajectories = eval_policy(controller, env, 10, args.video_num, args.video_path, timestep=args.timestep, set_gt_params=True, print_timestep=100)
 
 def test_UP():
     env_name = 'DartHopperPT-v1'
