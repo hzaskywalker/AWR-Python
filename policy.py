@@ -38,15 +38,17 @@ class POLO(RolloutCEM):
         a = a.detach().cpu().numpy()
         r, obs, mask = self.model(params.detach().cpu().numpy(), x, a)
         r = torch.tensor(r, dtype=torch.float32, device=device) # original reward..
+        mask = torch.tensor(mask, device='cuda:0', dtype=torch.float)
 
         if self.value_net is not None:
             params = params[:, None].expand(-1, obs.shape[1], -1)
             params = params.reshape(-1, params.shape[-1])
             obs = torch.tensor(obs.reshape(-1, obs.shape[-1]), device='cuda:0', dtype=torch.float)
-            mask = torch.tensor(mask, device='cuda:0', dtype=torch.float)
 
             values = self.value_net(obs, params).reshape(*a.shape[:2])
             r = (values * mask).sum(dim=-1)
+        else:
+            r -= ((1-mask) * 2).sum(dim=-1)
 
         return -r
 
@@ -54,7 +56,7 @@ class POLO(RolloutCEM):
 def add_parser(parser):
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--env_name', type=str, default='DartHopperPT-v1')
-    parser.add_argument('--iter_num', type=int, default=5)
+    parser.add_argument('--iter_num', type=int, default=2)
     parser.add_argument('--initial_iter', type=int, default=0)
     parser.add_argument('--num_mutation', type=int, default=200)
     parser.add_argument('--num_elite', type=int, default=10)
@@ -77,6 +79,7 @@ def test_POLO():
     num = 5
 
     value_net = get_td3_value(env_name)
+    #value_net = None
 
     parser = argparse.ArgumentParser()
     add_parser(parser)

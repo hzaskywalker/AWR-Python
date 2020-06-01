@@ -6,6 +6,10 @@ import numpy as np
 from optim import CEM
 import torch
 from collections import deque
+from evaluation import osi_eval
+from networks import get_up_network
+from model import make_parallel, make, get_params
+
 
 class CEMOSI:
     def __init__(self, model, init_mean, iter_num, num_mutation, num_elite,
@@ -71,16 +75,12 @@ class CEMOSI:
 
 
 def test_up_osi():
-    from evaluation import osi_eval
-    from networks import get_up_network
-    from model import make_parallel, make, get_params
-
     env_name = 'DartHopperPT-v1'
     num = 5
 
     policy_net = get_up_network(env_name, num)
 
-    model = make_parallel(10, env_name, num=num, stochastic=False)
+    model = make_parallel(30, env_name, num=num, stochastic=False)
     env = make(env_name, num=num, resample_MP=True, stochastic=False)
 
     params = get_params(env)
@@ -91,7 +91,7 @@ def test_up_osi():
         iter_num=20, num_mutation=100, num_elite=10, std=0.3)
     policy_net.set_params(mean_params)
 
-    osi_eval(env, osi, policy_net, num_init_traj=1, max_horizon=20, eval_episodes=10, use_state=False, print_timestep=10000)
+    osi_eval(env, osi, policy_net, num_init_traj=1, max_horizon=20, eval_episodes=100, use_state=False, print_timestep=10000)
 
 
 if __name__ == '__main__':

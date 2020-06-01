@@ -25,12 +25,13 @@ def set_state(env, state, param=None):
 
 class Rollout:
     # rollout return the observation but not the states..
-    def __init__(self, make, env_name, num, stochastic_obs):
+    def __init__(self, make, env_name, num, stochastic_obs, done=True):
         self.env = make(env_name, num)
         self.env.reset()
 
         # TODO:close noise
         self.env.env.noisy_input = stochastic_obs
+        self.done = done
 
     def __call__(self, params, s, a):
         rewards = []
@@ -55,12 +56,12 @@ class Rollout:
                 obs[batch_idx, idx] = s
                 mask[batch_idx, idx] = 1
 
-                if done:
+                if done and self.done:
                     break
             rewards.append(reward)
             batch_idx += 1
         return np.array(rewards), np.array(obs), np.array(mask)
 
 
-def make_parallel(num_proc, env_name, num, stochastic=False):
-    return DataParallel(num_proc, Rollout, make, env_name, num, stochastic)
+def make_parallel(num_proc, env_name, num, stochastic=False, done=True):
+    return DataParallel(num_proc, Rollout, make, env_name, num, stochastic, done=done)

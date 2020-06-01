@@ -55,56 +55,64 @@ def eval_policy(policy, eval_env, eval_episodes=10, save_video=0, video_path="vi
     return trajectories, rewards
 
 
+def collect_trajectories(eval_env, policy, num_traj, max_horizon, use_state, use_done=True):
+    gt_params = get_params(eval_env)
+
+    for i in range(num_traj):
+        obs = eval_env.reset()
+        set_params(eval_env, gt_params)
+
+        init_state = get_state(eval_env)
+        observations = None
+        actions = None
+        masks = None
+
+        if use_state:
+            obs = init_state
+
+        policy.reset()
+        for j in range(max_horizon):
+            action = policy(obs)
+            if np.random.random() > 0: # explore
+                action = eval_env.action_space.sample()
+            obs, _, done, _ = eval_env.step(action)
+
+            if observations is None:
+                observations = np.zeros((max_horizon, len(obs)))
+                actions = np.zeros((max_horizon, len(action)))
+                actions -= 10000000
+                masks = np.zeros(max_horizon)
+
+            observations[j] = obs
+            actions[j] = action
+            masks[j] = 1
+
+
+            if use_state:
+                # we always record the observation instead of the state
+                obs = get_state(eval_env)
+            if done and use_done:
+                break
+
+        if j == 0:
+            continue
+
+        yield init_state, observations, actions, masks
+
+
 def osi_eval(eval_env, osi, policy, num_init_traj, max_horizon, eval_episodes, use_state=True, print_timestep=1000):
 
 
     resample_MP_init = eval_env.env.resample_MP
     rewards = []
     for episode in range(eval_episodes):
+        osi.reset()
 
         eval_env.env.resample_MP = True
         eval_env.reset()
         eval_env.env.resample_MP = False
 
-        osi.reset()
-        gt_params = get_params(eval_env)
-
-        for i in range(num_init_traj):
-            obs = eval_env.reset()
-            set_params(eval_env, gt_params)
-
-            init_state = get_state(eval_env)
-            observations = None
-            actions = None
-            masks = None
-
-            if use_state:
-                obs = init_state
-
-            policy.reset()
-            for j in range(max_horizon):
-                action = policy(obs)
-                if np.random.random() > 0: # explore
-                    action = eval_env.action_space.sample()
-                obs, _, done, _ = eval_env.step(action)
-                if use_state:
-                    obs = get_state(eval_env)
-
-                if observations is None:
-                    observations = np.zeros((max_horizon, len(obs)))
-                    actions = np.zeros((max_horizon, len(action)))
-                    actions -= 10000000
-                    masks = np.zeros(max_horizon)
-
-                observations[j] = obs
-                actions[j] = action
-                masks[j] = 1
-
-                if done:
-                    break
-
-            if j == 0:
-                continue
+        for init_state, observations, actions, masks in collect_trajectories(eval_env, policy, num_init_traj, max_horizon, use_state):
             osi.update(init_state, observations, actions, masks)
 
         params = osi.get_params()
