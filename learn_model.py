@@ -128,13 +128,13 @@ def learn_with_dataset():
 
     env = make(env_name, num)
 
-    dataset = Dataset(env_name, num)
+    dataset = Dataset(env_name, num=5)
     params = get_params(env)
     mean_params = np.array([0.5] * len(params))
 
     model = make_parallel(10, env_name, num=num, stochastic=False, done=False)
     osi = CEMOSI(model, mean_params,
-        iter_num=1, num_mutation=100, num_elite=10, std=0.3)
+        iter_num=20, num_mutation=100, num_elite=10, std=0.3)
 
     learner = OSIModel(model, osi, ensemble=3)
     osi.cem.iter_num = 10

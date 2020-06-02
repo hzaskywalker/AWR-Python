@@ -26,6 +26,17 @@ class POLO(RolloutCEM):
     def cost(self, x, a):
         assert self.params is not None, "Please set the parameters first"
 
+        if len(self.params.shape) == 2:
+            # ensemble..
+            costs = []
+            pp = self.params
+            for j in self.params:
+                self.params = j
+                costs.append(self.cost(x, a))
+            self.params = pp
+            out = torch.stack(costs).min(dim=0)[0]
+            return out
+
         device = x.device
         dtype = x.dtype
 
