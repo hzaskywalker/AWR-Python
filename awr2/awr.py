@@ -56,8 +56,8 @@ class AsyncDDPGAgent:
         self.max_weight = max_weight
 
         # NOTE: optimizer is different
-        self.optim_actor = torch.optim.Adam(self.actor.parameters(), actor_lr)
-        self.optim_critic = torch.optim.Adam(self.critic.parameters(), critic_lr)
+        self.optim_actor = torch.optim.SGD(self.actor.parameters(), actor_lr, momentum=0.9)
+        self.optim_critic = torch.optim.SGD(self.critic.parameters(), critic_lr, momentum=0.9)
         self.pipe = pipe
         self.batch_size = batch_size
         self.mse = nn.MSELoss()
@@ -156,8 +156,7 @@ class AsyncDDPGAgent:
         if mode == 'sample':
             a = p.sample()
         else:
-            a = p.mean()
-        # unnoramlize action
+            a = p.loc
         return self.tocpu(a) * self.action_std + self.action_mean
 
     def value(self, obs):
@@ -182,9 +181,12 @@ class AsyncDDPGAgent:
         #print('finish critic', end='\n\n')
 
         # normalize advantages..
+        # we need to compute the value again
+        values = self.value(states)
+        discount_return = self.discount_return(rewards, dones, values, self.discount, self.td_lambda)
         adv = discount_return - values
         adv_valid = adv[valid_mask]
-        adv_norm = (adv - adv_valid.mean())/(adv.std() + ADV_EPS)
+        adv_norm = (adv - adv_valid.mean())/(adv_valid.std() + ADV_EPS)
 
         #print('actor', actor_steps)
         self.update_actor(actor_steps, states, actions, adv_norm, sample_idx, process_weight=process_weight)
@@ -194,15 +196,15 @@ class AsyncDDPGAgent:
     def discount_return(self, reward, done, value, discount, td_lambda):
         num_step = len(value)
         return_t = np.zeros([num_step])
-
         nxt = 0
         for t in range(num_step-1, -1, -1):
             if done[t]:
-                nxt = value[t]
+                #nxt = value[t]
+                nxt = 0
             else:
                 nxt_return = reward[t] + discount * nxt
-                nxt = (1.0 - td_lambda) * value[t] + td_lambda * nxt_return
                 return_t[t] = nxt_return
+                nxt = (1.0 - td_lambda) * value[t] + td_lambda * nxt_return
         return return_t
 
 
@@ -350,17 +352,16 @@ class AWR:
             i.set_params(params)
 
         start_command = [primary.START, [new_samples, critic_update_steps, actor_update_steps]]
-        for iter_id in tqdm.trange(num_iter):
+        for iter_id in range(num_iter):
             for i in self.workers:
                 i.send(start_command)
 
             self.update_normalizer()
 
-            for i in tqdm.trange(critic_update_steps):
-                self.reduce(mode='sum') # for critic
-
-            for i in tqdm.trange(actor_update_steps):
-                self.reduce(mode='sum') # for actor
+            for i in range(critic_update_steps):
+                self.reduce(mode='mean') # for critic
+            for i in range(actor_update_steps):
+                self.reduce(mode='mean') # for actor
 
             for i in self.workers:
                 out = i.recv()

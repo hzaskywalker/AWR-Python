@@ -15,8 +15,6 @@ class actor(nn.Module):
         self.logstd = nn.Parameter(torch.ones(oup_dim) * np.log(std), requires_grad=False)
         self.fc1 = nn.Linear(inp_dim, 128)
         self.fc2 = nn.Linear(128, 64)
-
-        # TODO: action network initialization
         self.action_out = nn.Linear(64, oup_dim)
         
         self.action_out.weight.data.mul_(0.1)
