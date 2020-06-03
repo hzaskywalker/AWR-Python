@@ -128,7 +128,15 @@ def osi_eval(eval_env, osi, policy, num_init_traj, max_horizon, eval_episodes, u
     eval_env.env.resample_MP = resample_MP_init
     return mean, std
 
-def online_osi(eval_env, osi, policy, num_init_traj, max_horizon, eval_episodes, use_state=True, print_timestep=1000, resample_MP=True):
+def online_osi(eval_env, osi, policy, num_init_traj, max_horizon, eval_episodes, use_state=True, print_timestep=1000, resample_MP=True, online=True):
+    # fix the seed...
+    from osi import seed 
+    seed(eval_env, 0)
+    parameters = []
+    for i in range(100):
+        eval_env.reset()
+        parameters.append(get_params(eval_env))
+
     resample_MP_init = eval_env.env.resample_MP
     rewards = []
     for episode in range(eval_episodes):
@@ -137,11 +145,14 @@ def online_osi(eval_env, osi, policy, num_init_traj, max_horizon, eval_episodes,
         eval_env.env.resample_MP = resample_MP
         eval_env.reset()
         eval_env.env.resample_MP = False
+        if parameters is not None:
+            set_params(eval_env, parameters[episode])
 
         for init_state, observations, actions, masks in collect_trajectories(eval_env, policy, num_init_traj, max_horizon, use_state):
             osi.update(init_state, observations, actions, masks)
 
-        params = osi.get_params()
+        #params = osi.get_params()
+        params = osi.find_min(5, method='average') # get a good initialization
         policy.set_params(params)
 
         reward = 0
@@ -168,16 +179,19 @@ def online_osi(eval_env, osi, policy, num_init_traj, max_horizon, eval_episodes,
             observations.append(obs)
             actions.append(action)
 
-            if i % max_horizon == max_horizon - 1 and i > max_horizon + 3:
-                idx = i - max_horizon - 1
-                osi.update(states[idx], observations[idx:idx+max_horizon], actions[idx:idx+max_horizon], 1, maxlen=3)
-                tmp = osi.cem.iter_num
-                osi.cem.iter_num = 5 # we need at least 10 iterations??
-                osi.cem.std = 0.1
-                osi.cem.num_mutation = 100
-                osi.cem.num_elite = 5
-                params = osi.get_params()
-                policy.set_params(params)
+            if i % max_horizon == max_horizon - 1 and i > max_horizon + 3 and online:
+                xx = i//max_horizon
+                if xx % online == online - 1:
+                    idx = i - max_horizon - 1
+                    osi.update(states[idx], observations[idx:idx+max_horizon], actions[idx:idx+max_horizon], 1, maxlen=3)
+                    tmp = osi.cem.iter_num
+                    #osi.cem.iter_num = 5 # we need at least 10 iterations??
+                    osi.cem.iter_num = 10 # we need at least 10 iterations??
+                    osi.cem.std = 0.1
+                    osi.cem.num_mutation = 100
+                    osi.cem.num_elite = 5
+                    params = params * 0.5 + osi.get_params() * 0.5 # don't know if this is ok
+                    policy.set_params(params)
                 print(params, get_params(eval_env))
                 print('\n\n', reward, "past: ", rewards[-10:], len(rewards), '\n\n')
 

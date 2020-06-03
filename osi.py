@@ -9,7 +9,14 @@ from collections import deque
 from evaluation import osi_eval, online_osi
 from networks import get_up_network
 from model import make_parallel, make, get_params, set_params
+import random
 
+def seed(env=None, seed=0):
+    if env is not None:
+        env.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    random.seed(seed)
 
 class CEMOSI:
     def __init__(self, model, init_mean, iter_num, num_mutation, num_elite,
@@ -122,6 +129,11 @@ class DiffOSI(CEMOSI):
         self.momentum = momentum
         self.lr = lr
         self.init = init
+        self.ensemble_num = 1
+        class XX:
+            ensemble_num = 1
+            iter_num = 1
+        self.cem = XX()
 
     def cost(self, scene, params):
         #return self.optim()
@@ -202,7 +214,7 @@ def test_up_osi():
     policy_net.set_params(mean_params)
 
 
-    online_osi(env, osi, policy_net, num_init_traj=1, max_horizon=15, eval_episodes=50, use_state=False, print_timestep=10000, resample_MP=True)
+    online_osi(env, osi, policy_net, num_init_traj=1, max_horizon=15, eval_episodes=20, use_state=False, print_timestep=10000, resample_MP=True, online=0)
 
 
 def test_cem_osi():
@@ -223,8 +235,8 @@ def test_cem_osi():
     env = make(env_name, num=num, resample_MP=True)
 
     #args.iter_num = 2
-    #args.num_mutation = 200
-    args.num_mutation = 100
+    args.num_mutation = 200
+    #args.num_mutation = 100
     args.iter_num = 2
     args.num_elite = 10
 
@@ -252,7 +264,7 @@ def test_cem_osi():
     policy_net.set_params(mean_params)
     print(get_params(env))
 
-    online_osi(env, osi, policy_net, num_init_traj=1, max_horizon=15, eval_episodes=10, use_state=True, print_timestep=10, resample_MP=resample_MP)
+    online_osi(env, osi, policy_net, num_init_traj=1, max_horizon=15, eval_episodes=10, use_state=True, print_timestep=10, resample_MP=resample_MP, online=1)
 
 
 def test_up_diff():
@@ -272,20 +284,20 @@ def test_up_diff():
 
     mean_params = policy_net.ob_rms.mean[-len(params):]
     mean_params = np.array([0.5] * len(params))
-    osi = CEMOSI(model, mean_params,
-        iter_num=20, num_mutation=100, num_elite=10, std=0.3)
-    #osi = DiffOSI(model, mean_params, 0.001, iter=100, momentum=0.9, eps=1e-5)
+    #osi = CEMOSI(model, mean_params,
+    #    iter_num=20, num_mutation=100, num_elite=10, std=0.3)
+    osi = DiffOSI(model, mean_params, 0.001, iter=100, momentum=0.9, eps=1e-5)
     policy_net.set_params(mean_params)
 
 
     # I run this at the last time..
     # online is very useful ..
-    online_osi(env, osi, policy_net, num_init_traj=1, max_horizon=15, eval_episodes=10, use_state=False, print_timestep=10000, resample_MP=True)
+    online_osi(env, osi, policy_net, num_init_traj=1, max_horizon=15, eval_episodes=20, use_state=False, print_timestep=10000, resample_MP=True)
     #osi_eval(env, osi, policy_net, num_init_traj=1, max_horizon=100, eval_episodes=10, use_state=False, print_timestep=10000, resample_MP=True)
 
 
 
 if __name__ == '__main__':
-    #test_up_osi()
+    test_up_osi()
+    #test_up_diff()
     #test_cem_osi()
-    test_up_diff()

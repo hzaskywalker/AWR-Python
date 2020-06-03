@@ -34,7 +34,7 @@ class POLO(RolloutCEM):
                 self.params = j
                 costs.append(self.cost(x, a))
             self.params = pp
-            out = torch.stack(costs).min(dim=0)[0]
+            out = torch.stack(costs).mean(dim=0)
             return out
 
         device = x.device
@@ -107,7 +107,7 @@ def test_POLO():
                             horizon=args.horizon, std=args.std,
                             iter_num=args.iter_num,
                             initial_iter=args.initial_iter,
-                            num_mutation=args.num_mutation, num_elite=args.num_elite, alpha=0.1, trunc_norm=True, lower_bound=env.action_space.low, upper_bound=env.action_space.high)
+                            num_mutation=args.num_mutation, num_elite=args.num_elite, alpha=0.1, trunc_norm=True, lower_bound=env.action_space.low, upper_bound=env.action_space.high, replan_period=5)
 
     trajectories = eval_policy(controller, env, 10, args.video_num, args.video_path, timestep=args.timestep, set_gt_params=True, print_timestep=100)
 

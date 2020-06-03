@@ -53,7 +53,7 @@ class RolloutCEM:
         if self.ac_buf is not None:
             if self.ac_buf.shape[0] > 0:
                 act, self.ac_buf = self.ac_buf[0], self.ac_buf[1:]
-                return act
+                return act.detach().cpu().numpy()
 
         if isinstance(obs, dict):
             obs, goal = obs['observation'], obs['desired_goal']
@@ -69,4 +69,4 @@ class RolloutCEM:
         if self.add_actions:
             self.prev_actions = torch.cat((self.prev_actions, self.init_actions(self.replan_period)))
 
-        return self.__call__(obs).detach().cpu().numpy()
+        return self.__call__(obs)
