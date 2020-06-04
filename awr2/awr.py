@@ -1,7 +1,7 @@
 # parallel awr.. don't know if it will work fine
-
 import torch
 import tqdm
+import os
 from torch import nn
 import copy
 import numpy as np
@@ -44,20 +44,24 @@ class AsyncDDPGAgent:
                  discount=0.99, td_lambda=0.95,
                  temp=1., max_weight=20, action_std=0.4,
                  actor_lr=0.0001, critic_lr=0.01, device='cpu',
-                 batch_size=256, pipe=None):
+                 batch_size=256, pipe=None, optimizer='SGD'):
 
         self.device = device
         inp_dim = observation_space.shape[0]
         self.actor = actor(inp_dim, action_space.low.shape[0], std=action_std).to(device)
         self.critic = critic(inp_dim).to(device)
         self.normalizer = Normalizer((inp_dim,), default_clip_range=5).to(device)
-        self.normalizer.count += 1
+        self.normalizer.count += 1 #unbiased ...
         self.temp = temp
         self.max_weight = max_weight
 
         # NOTE: optimizer is different
-        self.optim_actor = torch.optim.SGD(self.actor.parameters(), actor_lr, momentum=0.9)
-        self.optim_critic = torch.optim.SGD(self.critic.parameters(), critic_lr, momentum=0.9)
+        if optimizer == 'SGD':
+            self.optim_actor = torch.optim.SGD(self.actor.parameters(), actor_lr, momentum=0.9)
+            self.optim_critic = torch.optim.SGD(self.critic.parameters(), critic_lr, momentum=0.9)
+        else:
+            self.optim_actor = torch.optim.Adam(self.actor.parameters(), actor_lr)
+            self.optim_critic = torch.optim.Adam(self.critic.parameters(), critic_lr)
         self.pipe = pipe
         self.batch_size = batch_size
         self.mse = nn.MSELoss()
@@ -207,6 +211,12 @@ class AsyncDDPGAgent:
                 nxt = (1.0 - td_lambda) * value[t] + td_lambda * nxt_return
         return return_t
 
+    def save(self, path):
+        pipe = self.pipe
+        self.pipe = None
+        torch.save(self, path)
+        self.pipe = pipe
+
 
 class Worker(multiprocessing.Process):
     START = 1
@@ -214,10 +224,13 @@ class Worker(multiprocessing.Process):
     ASK = 3
     GET_PARAM = 4
     SET_PARAM = 5
+    COPY = 6
+    SET_ENV = 7
+    RESET = 8
 
     def __init__(self, make, env_name,
                  replay_buffer_size=50000, sample_size=2048,
-                 seed=0, is_primary=False, **kwargs):
+                 seed=0, is_primary=False, path=None, **kwargs):
         super(Worker, self).__init__()
         self.make = make
         self.env_name = env_name
@@ -230,6 +243,25 @@ class Worker(multiprocessing.Process):
         self.is_primary = is_primary
         self.daemon = True
         self.pipe, self.worker_pipe = multiprocessing.Pipe()
+
+        from logger import set_logger
+        if path is None and self.is_primary:
+            # save the model if it's the primary
+            import datetime
+            date = str(datetime.datetime.now()).split('.')[0]
+            path = f'/tmp/AWR/{env_name}_{date}'
+
+        if not os.path.exists(path):
+            os.makedirs(path)
+
+        self.path = path
+
+        if path is not None and path != 'tmp':
+            set_logger(os.path.join(path, 'log.txt'))
+            import logging
+            self.print = logging.info
+        else:
+            self.print = print
         self.start()
 
     def run(self):
@@ -258,6 +290,14 @@ class Worker(multiprocessing.Process):
             op, data = self.worker_pipe.recv()
             if op == self.EXIT:
                 break
+            elif op == self.RESET:
+                states = deque(maxlen=self.replay_buffer_size)
+                actions = deque(maxlen=self.replay_buffer_size)
+                rewards = deque(maxlen=self.replay_buffer_size)
+                dones = deque(maxlen=self.replay_buffer_size)
+                episode = 0
+                optim_iter = 0
+
             elif op == self.START:
                 new_samples, critic_steps, actor_steps = data
 
@@ -289,10 +329,11 @@ class Worker(multiprocessing.Process):
                         num += 1
 
                         episode += 1
+                        episodes.append(episode_reward)
+
                         if num >= new_samples:
                             break
                         obs = env.reset()
-                        episodes.append(episode_reward)
                         episode_reward=0
 
                 optim_iter += 1
@@ -302,20 +343,43 @@ class Worker(multiprocessing.Process):
                 agent.update_normalizer(new_states)
 
                 if self.is_primary:
-                    print(f'\n {optim_iter}: episode num: {len(episodes)}, reward: {np.mean(episodes)}, average length: {num/len(episodes)}')
+                    self.print(f'\n {optim_iter}: episode num: {len(episodes)}, reward: {np.mean(episodes)}, average length: {num/len(episodes)}')
 
                 # process weight is 1, ideally it shouldn't, but we don't care about it now ...
                 agent.update([states_, actions, rewards, dones], critic_steps, actor_steps, process_weight=1)
 
                 self.worker_pipe.send("FINISH ONE ITER")
 
+                if self.is_primary and optim_iter % 10 == 1:
+                    obs = env.reset()
+                    reward = 0
+                    while True:
+                        action = agent.act(obs[None,:], mode='test')[0]
+                        obs, r, done, info = env.step(action)
+                        reward += r
+                        if done:
+                            break
+                    self.print(f'\n {optim_iter}: test result {reward}')
+                    if self.path is not None:
+                        agent.save(os.path.join(self.path, 'model.pt'))
+
+
             elif op == self.ASK:
-                action = agent.act(data)
+                action = agent.act(*data)
                 self.worker_pipe.send(action)
+            elif op == self.SET_ENV:
+                from model import set_params
+                set_params(env, data)
             elif op == self.GET_PARAM:
                 self.worker_pipe.send(agent.get_params())
             elif op == self.SET_PARAM:
                 agent.set_params(data)
+            elif op == self.COPY:
+                normalizer_dict, critic_dict, actor_dict = data
+                agent.critic.load_state_dict(critic_dict)
+                agent.actor.load_state_dict(actor_dict)
+                agent.normalizer.load_state_dict(normalizer_dict)
+                agent.normalizer.size = (int(agent.critic.fc1.weight.shape[-1]),)
             else:
                 raise NotImplementedError
 
@@ -329,8 +393,25 @@ class Worker(multiprocessing.Process):
     def send(self, data):
         self.pipe.send(data)
 
+    def act(self, obs, mode='sample'):
+        self.pipe.send([self.ASK, [obs, mode]])
+        return self.pipe.recv()
+
+    def set_env(self, params):
+        self.pipe.send([self.SET_ENV, params])
+
+    def reset(self):
+        self.pipe.send([self.RESET, None])
+
     def recv(self):
         return self.pipe.recv()
+
+    def copy(self, normalizer, critic, actor):
+        self.pipe.send([self.COPY,
+            [normalizer.state_dict(),
+            critic.state_dict(),
+            actor.state_dict()]
+        ])
 
 
 class AWR:
@@ -345,23 +426,25 @@ class AWR:
             self.workers.append(Worker(*args, **kwargs, seed=seed + i, is_primary=(i==0)))
         self.start(num_iter, new_samples, critic_update_steps, actor_update_steps)
 
-    def start(self, num_iter, new_samples, critic_update_steps, actor_update_steps):
+    def start(self, num_iter, new_samples, critic_update_steps, actor_update_steps, sync_weights=True):
         primary = self.workers[0]
-        params = primary.get_params()
-        for i in self.workers:
-            i.set_params(params)
+
+        if sync_weights:
+            params = primary.get_params()
+            for i in self.workers:
+                i.set_params(params)
 
         start_command = [primary.START, [new_samples, critic_update_steps, actor_update_steps]]
-        for iter_id in range(num_iter):
+        for iter_id in tqdm.trange(num_iter):
             for i in self.workers:
                 i.send(start_command)
 
             self.update_normalizer()
 
             for i in range(critic_update_steps):
-                self.reduce(mode='mean') # for critic
+                self.reduce(mode='sum') # for critic
             for i in range(actor_update_steps):
-                self.reduce(mode='mean') # for actor
+                self.reduce(mode='sum') # for actor
 
             for i in self.workers:
                 out = i.recv()
@@ -388,7 +471,3 @@ class AWR:
             s += _s; sq += _sq; count += _count
         for i in self.workers:
             i.send([s, sq, count])
-
-    def __del__(self):
-        for i in self.workers:
-            i.close()

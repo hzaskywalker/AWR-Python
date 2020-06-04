@@ -73,7 +73,10 @@ def get_up_network(env_name, num):
     from a2c_ppo_acktr.model import Policy
     from a2c_ppo_acktr.storage import RolloutStorage
     env_name = env_name[:-5]
-    path = f"/home/hza/policy_transfer/PT/trained_models/ppo/UP_{env_name}_{num}.pt"
+    if 'Dart' in env_name:
+        path = f"/home/hza/policy_transfer/PT/trained_models/ppo/UP_{env_name}_{num}.pt"
+    else:
+        path = f"/home/hza/policy_transfer/PT/trained_models/ppo/UP_{env_name}_{num}.pt"
     result = torch.load(path, map_location=lambda a, b:torch.Storage().cuda())
 
     actor_critic = result[0]

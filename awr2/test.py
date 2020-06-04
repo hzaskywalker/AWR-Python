@@ -1,11 +1,145 @@
+import numpy as np
 from awr import AWR
+import torch
 from gym import make
+import sys
+sys.path.append('/home/hza/policy_transfer/')
+sys.path.append('/home/hza/policy_transfer/PT')
 
 def test():
+    """
     env_name = 'Hopper-v2'
-    AWR(1, make=make, env_name=env_name, device='cuda:0')
+
+    AWR(10, make=make, env_name=env_name, device='cuda:0', critic_update_steps=20, actor_update_steps=100, replay_buffer_size=5000)
+    from gym import make
+    AWR(10, make=make, env_name=env_name, device='cuda:0')
+    """
     #env_name = 'InvertedPendulum-v2'
     #AWR(4, make=make, env_name=env_name, device='cuda:0', actor_lr=0.00005, action_std=0.2)
 
+    #from envs import make
+    #make2 = lambda env_name: make(env_name, num=5, resample_MP=True, stochastic=True, train_UP=True)
+    #env_name = 'HopperPT-v2'
+    #AWR(10, make=make2, env_name=env_name, device='cuda:0')
+
+    from envs import make
+    make2 = lambda env_name: make(env_name, num=5, resample_MP=False, stochastic=True, train_UP=True)
+    env_name = 'HopperPT-v3'
+    AWR(10, make=make2, env_name=env_name, device='cuda:0', critic_update_steps=20, actor_update_steps=100, replay_buffer_size=5000)
+
+class Maker:
+    def __init__(self, params, make, set_params):
+        self.params = params
+        self.make = make
+        self.set_params = set_params
+
+    def __call__(self, env_name):
+        env = self.make(env_name, num=5, resample_MP=False, stochastic=True, train_UP=False)
+        self.set_params(env, self.params)
+        return env
+
+
+def clip_networks(normalizer, critic, actor, params):
+    num = params.shape[-1]
+
+    normed_params = (torch.tensor(params, device=normalizer.sum.device).float() - normalizer.mean[-num:])/normalizer.std[-num:]
+    normed_params = normed_params.clamp(-5, 5)
+    #normed_params = torch.tensor(params, device='cuda:0').float()
+    normalizer.size = (normalizer.size[0] - num,)
+    normalizer.sum.data = normalizer.sum.data[:-num]
+    normalizer.sumsq.data = normalizer.sumsq.data[:-num]
+    normalizer.mean.data = normalizer.mean.data[:-num]
+    normalizer.std.data = normalizer.std.data[:-num]
+
+    critic.fc1.bias.data += (critic.fc1.weight[:, -num:] @ normed_params).data
+    critic.fc1.weight.data = critic.fc1.weight.data[:, :-num]
+
+    actor.fc1.bias.data += (actor.fc1.weight[:, -num:] @ normed_params).data
+    actor.fc1.weight.data = actor.fc1.weight.data[:, :-num]
+    return normalizer, critic, actor
+
+
+def fine_tune():
+    env_name = 'HopperPT-v2'
+    from envs import make
+    from model import get_params, set_params
+    env = make(env_name, num=5, resample_MP=True, stochastic=True, train_UP=False)
+
+    import torch
+    import dill # for pickle
+    from multiprocessing import set_start_method
+    set_start_method('spawn')
+
+    agent = torch.load('model.pt')
+    agent.normalizer.cpu()
+    agent.critic.cpu()
+    agent.actor.cpu()
+    agent.device='cpu'
+
+    #print(agent.act(np.concatenate((obs, params))[None,:], mode='test')[0])
+    rewards = []
+    rewards2 = []
+
+    params = get_params(env)
+    make2 = Maker(params, make, set_params)
+    awr = AWR(10, make=make2, env_name=env_name, num_iter=0, device='cuda:0', replay_buffer_size=50000, path='tmp', optimizer='SGD')
+
+    from osi import seed
+    for iter in range(10):
+        reward = 0
+        obs = env.reset()
+        oo = obs.copy()
+        params = get_params(env)
+        while True:
+            action = agent.act(np.concatenate((obs, params))[None,:], mode='test')[0]
+            obs, r, done, _ = env.step(action)
+            reward += r
+            if done:
+                break
+        rewards.append(reward)
+        print(iter, reward)
+
+        import copy
+        agent2 = copy.deepcopy(agent)
+        weights = clip_networks(agent2.normalizer, agent2.critic, agent2.actor, params)
+
+        """
+        reward = 0
+        obs = env.reset()
+        while True:
+            action = agent.act(obs[None,:], mode='sample')[0]
+            obs, r, done, _ = env.step(action)
+            reward += r
+            if done:
+                break
+        #print(agent.act(oo[None,:], mode='test')[0])
+        #print('second', reward)
+        """
+        #print('start copy')
+        #agent2.actor.logstd.data[:] = np.log(0.4)
+        for i in awr.workers:
+            i.copy(*weights)
+            i.set_env(params)
+            i.reset()
+
+        awr.start(num_iter=5, new_samples=2048, critic_update_steps=20, actor_update_steps=200, sync_weights=False)
+
+        reward = 0
+        obs = env.reset()
+        set_params(env, params)
+        while True:
+            action = awr.workers[0].act(obs[None,:], mode='test')[0]
+            #action = agent2.act(obs[None,:], mode='test')[0]
+            obs, r, done, _ = env.step(action)
+            reward += r
+            if done:
+                break
+        rewards2.append(reward)
+        print('+', iter, reward)
+
+    print(np.mean(rewards), np.mean(rewards2))
+
+
 if __name__ == '__main__':
-    test()
+    #test()
+    fine_tune()
