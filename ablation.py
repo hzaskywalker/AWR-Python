@@ -10,9 +10,9 @@ import random
 from osi import CEMOSI
 
 
-def mytest(env_name, eval_episode=10, num_init_traj=1, max_horizon=15, ensemble=1, gt=0, finetune=False, finetune_iter=1):
+def mytest(env_name, eval_episode=10, num_init_traj=1, max_horizon=15, ensemble=1, gt=0, finetune=False, finetune_iter=1, finetune_proc=10):
     NUMS = {
-        'HalfCheetahPT-v2': 7,
+        'HalfCheetahPT-v2': 6,
         'HopperPT-v2': 5,
         'Walker2dPT-v2': 8,
     }
@@ -22,7 +22,7 @@ def mytest(env_name, eval_episode=10, num_init_traj=1, max_horizon=15, ensemble=
     if not finetune:
         policy_net = get_awr_network(env_name, num)
     else:
-        policy_net = get_finetune_network(env_name, num, num_iter=finetune_iter)
+        policy_net = get_finetune_network(env_name, num, num_iter=finetune_iter, num_proc=finetune_proc)
 
     model = make_parallel(10, env_name, num=num, stochastic=False)
     env = make(env_name, num=num, resample_MP=True, stochastic=False)
@@ -46,18 +46,21 @@ def mytest(env_name, eval_episode=10, num_init_traj=1, max_horizon=15, ensemble=
 
 
 def exp():
-    env_name = 'HopperPT-v2'
+    #env_name = 'HopperPT-v2'
     #env_name = 'HalfCheetahPT-v2'
+    env_name = 'Walker2dPT-v2'
     results = {}
-    eval_episode = 30
-    results['gt']=mytest(env_name, gt=1, eval_episode=eval_episode, num_init_traj=1, finetune=0)
-    results['gt2']=mytest(env_name, gt=1, eval_episode=eval_episode, num_init_traj=1, finetune=1, finetune_iter=11)
+    eval_episode = 10
+    #results['gt']=mytest(env_name, gt=1, eval_episode=eval_episode, num_init_traj=1, finetune=0)
+    #results['gt2']=mytest(env_name, gt=1, eval_episode=eval_episode, num_init_traj=1, finetune=1, finetune_iter=11)
+    #results['gt2']=mytest(env_name, gt=1, eval_episode=eval_episode, num_init_traj=1, finetune=1, finetune_iter=0, finetune_proc=1)
     #results['more_traj']=mytest(env_name, gt=0, eval_episode=eval_episode, num_init_traj=5, ensemble=1)
     #results['osi']=mytest(env_name, gt=0, eval_episode=eval_episode, num_init_traj=1, ensemble=1)
-    #results['ensemble']=mytest(env_name, gt=0, eval_episode=eval_episode, num_init_traj=1, ensemble=5)
+    results['ensemble_finetue']=mytest(env_name, gt=0, eval_episode=eval_episode, num_init_traj=1, ensemble=5, finetune=1, finetune_iter=11)
+    results['ensemble']=mytest(env_name, gt=0, eval_episode=eval_episode, num_init_traj=1, ensemble=5)
 
     import json
-    with open(f'{env_name}.json', 'w') as f:
+    with open(f'{env_name}_finetune.json', 'w') as f:
         json.dump(results, f)
 
 

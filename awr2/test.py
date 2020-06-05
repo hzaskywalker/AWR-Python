@@ -153,9 +153,9 @@ def fine_tune():
         """
         #print('start copy')
         #agent2.actor.logstd.data[:] = np.log(0.4)
-        for i in awr.workers:
+        for idx, i in enumerate(awr.workers):
             i.copy(*weights)
-            i.set_env(params)
+            i.set_env(params[idx%params.shape[0]])
             i.reset()
 
         #normalizer_dict, critic_dict, actor_dict = [i.state_dict() for i in weights]

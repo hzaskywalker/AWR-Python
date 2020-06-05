@@ -37,10 +37,12 @@ def clip_networks(normalizer, critic, actor, params):
 
 
 class Finetune:
-    def __init__(self, env_name, num, agent, num_iter=21):
+    def __init__(self, env_name, num, agent, num_iter=21, num_proc=10):
         # pass
         self.num_iter = num_iter
 
+        agent.optim_actor = None
+        agent.optim_critic = None
         agent.normalizer.cpu()
         agent.critic.cpu()
         agent.actor.cpu()
@@ -48,6 +50,7 @@ class Finetune:
         agent.num = num
         self.env_name = env_name
         self.num = num
+        self.num_proc = num_proc
 
         self.agent = agent
         self.awr = None
@@ -56,25 +59,27 @@ class Finetune:
         pass
 
     def set_params(self, params):
+        if len(params.shape) == 1:
+            params = np.array([params])
         if self.awr is None:
             from envs import make
             from model import set_params
             from awr2.awr import AWR
-            make2 = Maker(params, make, set_params, num=self.num)
+            make2 = Maker(params[0], make, set_params, num=self.num)
             env_name = self.env_name
 
             actor_lr = 0.0001 if env_name[0]!='W' else 0.000025
             activation = 'tanh' if env_name[0] == 'W' else 'relu'
 
-            self.awr = AWR(10, make=make2, env_name=env_name, num_iter=0, device='cuda:0', replay_buffer_size=50000, path='tmp', optimizer='SGD', actor_lr = actor_lr, activation=activation)
+            self.awr = AWR(self.num_proc, make=make2, env_name=env_name, num_iter=0, device='cuda:0', replay_buffer_size=50000, path='tmp', optimizer='SGD', actor_lr = actor_lr, activation=activation)
 
         import copy
         agent2 = copy.deepcopy(self.agent)
-        weights = clip_networks(agent2.normalizer, agent2.critic, agent2.actor, params)
+        weights = clip_networks(agent2.normalizer, agent2.critic, agent2.actor, params.mean(axis=0))
 
-        for i in self.awr.workers:
+        for idx, i in enumerate(self.awr.workers):
             i.copy(*weights)
-            i.set_env(params)
+            i.set_env(params[idx%params.shape[0]])
             i.reset()
 
         self.awr.start(num_iter=self.num_iter, new_samples=2048, critic_update_steps=20, actor_update_steps=200, sync_weights=False)
