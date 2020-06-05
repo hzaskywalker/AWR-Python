@@ -31,13 +31,11 @@ def test():
     #env_name = 'Walker2dPT-v2'
     #AWR(10, make=make2, env_name=env_name, device='cuda:0', critic_update_steps=20, actor_update_steps=100, replay_buffer_size=5000, path='Walker2d-v2')
 
-    """
     env_name = 'HalfCheetahPT-v2'
-    num = 7
+    num = 6
     make2 = lambda env_name: make(env_name, num=num, resample_MP=True, stochastic=True, train_UP=True)
     AWR(10, make=make2, env_name=env_name, device='cuda:0', path='HalfCheetah2d-v2', actor_lr=0.0001, critic_lr=0.01, critic_update_steps=20, actor_update_steps=100, replay_buffer_size=5000)
     exit(0)
-    """
 
     env_name = 'Walker2dPT-v2'
 
@@ -177,5 +175,5 @@ def fine_tune():
 
 
 if __name__ == '__main__':
-    #test()
-    fine_tune()
+    test()
+    #fine_tune()

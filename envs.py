@@ -30,8 +30,8 @@ def make(env_name, num, seed = 1000, stochastic=True, resample_MP=False, train_U
         env = make_env(env_name, [0,1,2,3,4,5,6,7,8,9,10,11,12, 13,14], seed)
     elif env_name == "DartHalfCheetahPT-v1" and num == 8:
         env = make_env(env_name, [0,1,2,3,4,5,6,7], seed)
-    elif env_name == "HalfCheetahPT-v2" and num == 7:
-        env = make_env(env_name, [0,1,2,3,4,5,6], seed)
+    elif env_name == "HalfCheetahPT-v2" and num == 6:
+        env = make_env(env_name, [0,2,3,4,5,6], seed)
     else:
         raise NotImplementedError(f"{env_name} and num={num} is not implemented")
     env.env.noisy_input = stochastic
