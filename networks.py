@@ -112,3 +112,12 @@ def get_awr_network(env_name, num):
     path = f'awr2/models/{env_name}'
     agent = torch.load(path)
     return UP2(agent)
+
+def get_finetune_network(env_name, num, num_iter=21):
+    import torch
+    import sys
+    from finetune import Finetune
+    sys.path.append('awr2')
+    path = f'awr2/models/{env_name}'
+    agent = torch.load(path)
+    return Finetune(env_name, num, agent, num_iter)

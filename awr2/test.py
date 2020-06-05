@@ -34,7 +34,7 @@ def test():
     env_name = 'HalfCheetahPT-v2'
     num = 6
     make2 = lambda env_name: make(env_name, num=num, resample_MP=True, stochastic=True, train_UP=True)
-    AWR(10, make=make2, env_name=env_name, device='cuda:0', path='HalfCheetah2d-v2', actor_lr=0.0001, critic_lr=0.01, critic_update_steps=20, actor_update_steps=100, replay_buffer_size=5000)
+    AWR(1, make=make2, env_name=env_name, device='cuda:0', path='HalfCheetah2d-v2', actor_lr=0.0001, critic_lr=0.01, critic_update_steps=20, actor_update_steps=100, replay_buffer_size=5000)
     exit(0)
 
     env_name = 'Walker2dPT-v2'
@@ -115,10 +115,12 @@ def fine_tune():
 
     params = get_params(env)
     make2 = Maker(params, make, set_params, num=num)
-    awr = AWR(1, make=make2, env_name=env_name, num_iter=0, device='cuda:0', replay_buffer_size=50000, path='tmp', optimizer='SGD')
+    awr = AWR(1, make=make2, env_name=env_name, num_iter=0, device='cuda:0', replay_buffer_size=50000, path='tmp', optimizer='SGD', activation='tanh')
+    print("WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW")
+    print('activation for walker2d is tanh')
 
     from osi import seed
-    for iter in range(20):
+    for iter in range(30):
         reward = 0
         obs = env.reset()
         oo = obs.copy()
@@ -156,13 +158,21 @@ def fine_tune():
             i.set_env(params)
             i.reset()
 
+        #normalizer_dict, critic_dict, actor_dict = [i.state_dict() for i in weights]
+        #agent2.critic.load_state_dict(critic_dict)
+        #agent2.actor.load_state_dict(actor_dict)
+        #agent2.normalizer.load_state_dict(normalizer_dict)
+        #agent2.normalizer.size = (int(agent2.critic.fc1.weight.shape[-1]),)
+
         awr.start(num_iter=0, new_samples=2048, critic_update_steps=20, actor_update_steps=200, sync_weights=False)
 
         reward = 0
         obs = env.reset()
         set_params(env, params)
+
         while True:
             action = awr.workers[0].act(obs[None,:], mode='test')[0]
+            #print(action)
             #action = agent2.act(obs[None,:], mode='test')[0]
             obs, r, done, _ = env.step(action)
             reward += r
@@ -175,5 +185,5 @@ def fine_tune():
 
 
 if __name__ == '__main__':
-    test()
-    #fine_tune()
+    #test()
+    fine_tune()
