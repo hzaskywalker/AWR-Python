@@ -23,18 +23,46 @@ def test():
     #AWR(10, make=make2, env_name=env_name, device='cuda:0')
 
     from envs import make
-    make2 = lambda env_name: make(env_name, num=5, resample_MP=False, stochastic=True, train_UP=True)
-    env_name = 'HopperPT-v3'
-    AWR(10, make=make2, env_name=env_name, device='cuda:0', critic_update_steps=20, actor_update_steps=100, replay_buffer_size=5000)
+    #env_name = 'HopperPT-v2'
+    #env_name = 'HalfCheetahPT-v2'
+    #env_name = 'Walker2dPT-v2'
+    #AWR(10, make=make2, env_name=env_name, device='cuda:0', critic_update_steps=100, actor_update_steps=1000, replay_buffer_size=50000, path='HopperPT-v2')
+
+    #env_name = 'Walker2dPT-v2'
+    #AWR(10, make=make2, env_name=env_name, device='cuda:0', critic_update_steps=20, actor_update_steps=100, replay_buffer_size=5000, path='Walker2d-v2')
+
+    """
+    env_name = 'HalfCheetahPT-v2'
+    num = 7
+    make2 = lambda env_name: make(env_name, num=num, resample_MP=True, stochastic=True, train_UP=True)
+    AWR(10, make=make2, env_name=env_name, device='cuda:0', path='HalfCheetah2d-v2', actor_lr=0.0001, critic_lr=0.01, critic_update_steps=20, actor_update_steps=100, replay_buffer_size=5000)
+    exit(0)
+    """
+
+    env_name = 'Walker2dPT-v2'
+
+    #num = 8
+    num = 8
+    make2 = lambda env_name: make(env_name, num=num, resample_MP=True, stochastic=True, train_UP=True)
+    #def make3(env_name):
+    #    env = make(env_name, num=num, resample_MP=True, stochastic=True, train_UP=True)
+    #    from model import set_params
+    #    set_params(env, np.array([1., 1., 1.]))
+        
+    #AWR(10, make=make2, env_name=env_name, device='cuda:0', path='Walker2d_2-v2', actor_lr=0.0001, critic_lr=0.01)
+    #AWR(10, make=make2, env_name=env_name, device='cuda:0', path='Walker2d_2-v4', actor_lr=0.0001, critic_lr=0.01)
+    #AWR(10, make=make2, env_name=env_name, device='cuda:0', path='Walker2d_2-v2', actor_lr=0.000025, critic_lr=0.01, critic_update_steps=20, actor_update_steps=100, replay_buffer_size=10000, activation='tanh', hidden_size=(128, 64), optimizer='SGD', action_std=0.4)
+    AWR(10, make=make2, env_name=env_name, device='cuda:0', path='Walker2d_2-v3', actor_lr=0.000025, critic_lr=0.01, critic_update_steps=20, actor_update_steps=100, replay_buffer_size=50000, activation='tanh', hidden_size=(256, 128), optimizer='SGD', action_std=0.4)
 
 class Maker:
-    def __init__(self, params, make, set_params):
+    def __init__(self, params, make, set_params, num):
         self.params = params
         self.make = make
         self.set_params = set_params
+        self.num = num
 
     def __call__(self, env_name):
-        env = self.make(env_name, num=5, resample_MP=False, stochastic=True, train_UP=False)
+        env = self.make(env_name, num=self.num, resample_MP=False, stochastic=True, train_UP=False)
         self.set_params(env, self.params)
         return env
 
@@ -60,36 +88,44 @@ def clip_networks(normalizer, critic, actor, params):
 
 
 def fine_tune():
-    env_name = 'HopperPT-v2'
+    #env_name = 'HopperPT-v2'
+    #num = 5
+    env_name = 'Walkek2dPT-v2'
+    num = 8
+    env_name = 'HalfCheetahPT-v2'
+    num = 7
+
     from envs import make
     from model import get_params, set_params
-    env = make(env_name, num=5, resample_MP=True, stochastic=True, train_UP=False)
+    env = make(env_name, num=num, resample_MP=True, stochastic=True, train_UP=False)
 
     import torch
     import dill # for pickle
     from multiprocessing import set_start_method
     set_start_method('spawn')
 
-    agent = torch.load('model.pt')
+    agent = torch.load(f'models/{env_name}')
     agent.normalizer.cpu()
     agent.critic.cpu()
     agent.actor.cpu()
     agent.device='cpu'
+    agent.num = num
 
     #print(agent.act(np.concatenate((obs, params))[None,:], mode='test')[0])
     rewards = []
     rewards2 = []
 
     params = get_params(env)
-    make2 = Maker(params, make, set_params)
-    awr = AWR(10, make=make2, env_name=env_name, num_iter=0, device='cuda:0', replay_buffer_size=50000, path='tmp', optimizer='SGD')
+    make2 = Maker(params, make, set_params, num=num)
+    awr = AWR(1, make=make2, env_name=env_name, num_iter=0, device='cuda:0', replay_buffer_size=50000, path='tmp', optimizer='SGD')
 
     from osi import seed
-    for iter in range(10):
+    for iter in range(20):
         reward = 0
         obs = env.reset()
         oo = obs.copy()
         params = get_params(env)
+        print(params)
         while True:
             action = agent.act(np.concatenate((obs, params))[None,:], mode='test')[0]
             obs, r, done, _ = env.step(action)
@@ -122,7 +158,7 @@ def fine_tune():
             i.set_env(params)
             i.reset()
 
-        awr.start(num_iter=5, new_samples=2048, critic_update_steps=20, actor_update_steps=200, sync_weights=False)
+        awr.start(num_iter=0, new_samples=2048, critic_update_steps=20, actor_update_steps=200, sync_weights=False)
 
         reward = 0
         obs = env.reset()
@@ -141,5 +177,5 @@ def fine_tune():
 
 
 if __name__ == '__main__':
-    #test()
-    fine_tune()
+    test()
+    #fine_tune()

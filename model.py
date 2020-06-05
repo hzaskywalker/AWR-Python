@@ -49,6 +49,7 @@ class Rollout:
                 if action.max() < -10000:
                     break
                 s, r, done, _ = self.env.step(action)
+                reward += r
                 if obs is None:
                     obs = np.zeros((batch_size, len(a), len(s)))
                     mask = np.zeros((batch_size, len(a)), dtype=np.int32)

@@ -61,8 +61,7 @@ class POLO(RolloutCEM):
             #r = r
             r = r + (values * mask).sum(dim=-1) * 0.01
         else:
-            r -= ((1-mask) * 2).sum(dim=-1)
-
+            pass
         return -r
 
 

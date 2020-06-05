@@ -72,9 +72,10 @@ def collect_trajectories(eval_env, policy, num_traj, max_horizon, use_state, use
 
         policy.reset()
         for j in range(max_horizon):
-            action = policy(obs)
             if np.random.random() > 0 and random_policy: # explore
                 action = eval_env.action_space.sample()
+            else:
+                action = policy(obs)
             obs, _, done, _ = eval_env.step(action)
 
             if observations is None:
@@ -128,7 +129,7 @@ def osi_eval(eval_env, osi, policy, num_init_traj, max_horizon, eval_episodes, u
     eval_env.env.resample_MP = resample_MP_init
     return mean, std
 
-def online_osi(eval_env, osi, policy, num_init_traj, max_horizon, eval_episodes, use_state=True, print_timestep=1000, resample_MP=True, online=True):
+def online_osi(eval_env, osi, policy, num_init_traj, max_horizon, eval_episodes, use_state=True, print_timestep=1000, resample_MP=True, online=True, ensemble=1, gt=False):
     # fix the seed...
     from osi import seed 
     seed(eval_env, 0)
@@ -152,8 +153,12 @@ def online_osi(eval_env, osi, policy, num_init_traj, max_horizon, eval_episodes,
             osi.update(init_state, observations, actions, masks)
 
         #params = osi.get_params()
-        params = osi.find_min(5, method='average') # get a good initialization
+        if gt:
+            params = get_params(eval_env)
+        else:
+            params = osi.find_min(ensemble, method='all') # get a good initialization
         policy.set_params(params)
+        print(params, get_params(eval_env))
 
         reward = 0
         obs, state = eval_env.reset(), get_state(eval_env)
@@ -178,6 +183,9 @@ def online_osi(eval_env, osi, policy, num_init_traj, max_horizon, eval_episodes,
 
             observations.append(obs)
             actions.append(action)
+
+            if i % print_timestep == print_timestep - 1:
+                print('\n\n', reward, "past: ", rewards[-10:], len(rewards), '\n\n')
 
             if i % max_horizon == max_horizon - 1 and i > max_horizon + 3 and online:
                 xx = i//max_horizon

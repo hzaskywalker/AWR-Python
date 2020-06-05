@@ -41,15 +41,15 @@ def _set_flat_params_or_grads(network, flat_params, mode='params'):
 
 class AsyncDDPGAgent:
     def __init__(self, observation_space, action_space,
-                 discount=0.99, td_lambda=0.95,
+                 discount=0.99, td_lambda=0.95, hidden_size=(128, 64),
                  temp=1., max_weight=20, action_std=0.4,
                  actor_lr=0.0001, critic_lr=0.01, device='cpu',
-                 batch_size=256, pipe=None, optimizer='SGD'):
+                 batch_size=256, pipe=None, optimizer='SGD', activation='relu'):
 
         self.device = device
         inp_dim = observation_space.shape[0]
-        self.actor = actor(inp_dim, action_space.low.shape[0], std=action_std).to(device)
-        self.critic = critic(inp_dim).to(device)
+        self.actor = actor(inp_dim, action_space.low.shape[0], std=action_std, hidden_size=hidden_size, activation=activation).to(device)
+        self.critic = critic(inp_dim, hidden_size=hidden_size, activation=activation).to(device)
         self.normalizer = Normalizer((inp_dim,), default_clip_range=5).to(device)
         self.normalizer.count += 1 #unbiased ...
         self.temp = temp

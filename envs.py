@@ -13,17 +13,25 @@ def make(env_name, num, seed = 1000, stochastic=True, resample_MP=False, train_U
     elif env_name == "DartHopperPT-v1" and num == 5:
         env = make_env(env_name, [0,1,2,5,9], seed)
     elif env_name == "HopperPT-v2" and num == 5:
-        env = make_env(env_name, [0,1,2,5,9], seed)
+        env = make_env(env_name, [0,1,2,5,8], seed)
     elif env_name == "HopperPT-v3" and num == 5:
-        env = make_env(env_name, [0,1,2,5,9], seed)
+        env = make_env(env_name, [0,1,2,5,8], seed)
     elif env_name == "DartHopperPT-v1" and num == 10:
         env = make_env(env_name, [0,1,2,3,4,5, 6,7,8, 9], seed)
     elif env_name == "DartWalker2dPT-v1" and num == 8:
         env = make_env(env_name, [7,8,9,10,11,12, 13,14], seed)
+    elif env_name == "Walker2dPT-v2" and num == 8:
+        env = make_env(env_name, [4, 5, 6, 7, 8, 9, 10, 11], seed)
+    elif env_name == "Walker2dPT-v4" and num == 3:
+        env = make_env("Walker2dPT-v2", [4, 5, 6], seed)
+    elif env_name == "Walker2dPT-v3" and num == 8:
+        env = make_env(env_name, [4, 5, 6, 7, 8, 9, 10, 11], seed)
     elif env_name == "DartWalker2dPT-v1" and num == 15:
         env = make_env(env_name, [0,1,2,3,4,5,6,7,8,9,10,11,12, 13,14], seed)
     elif env_name == "DartHalfCheetahPT-v1" and num == 8:
         env = make_env(env_name, [0,1,2,3,4,5,6,7], seed)
+    elif env_name == "HalfCheetahPT-v2" and num == 7:
+        env = make_env(env_name, [0,1,2,3,4,5,6], seed)
     else:
         raise NotImplementedError(f"{env_name} and num={num} is not implemented")
     env.env.noisy_input = stochastic

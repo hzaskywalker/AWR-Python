@@ -7,7 +7,7 @@ from optim import CEM
 import torch
 from collections import deque
 from evaluation import osi_eval, online_osi
-from networks import get_up_network
+from networks import get_up_network, get_awr_network
 from model import make_parallel, make, get_params, set_params
 import random
 
@@ -42,7 +42,7 @@ class CEMOSI:
 
         params = params.detach().cpu().numpy()
         negative_mask = (params.max(axis=-1) < -0.05)
-        params = params.clip(-0.05, np.inf)
+        params = params.clip(-0.05, 1.05)
 
         params = np.tile(params[:, None], (1, n_traj, 1))
         states = np.tile(np.array([self.states]), (n_param, 1, 1))
@@ -110,7 +110,7 @@ class CEMOSI:
                 min_params = out
             pp = pp + out
             params.append(out)
-        #return params
+
         if method == 'all':
             return np.stack(params)
         elif method == 'average':
@@ -189,16 +189,19 @@ class DiffOSI(CEMOSI):
             mean = mean - grad * self.lr
 
             mean = mean.clip(-0.05, np.inf)
+        self._loss = cost.mean()
         self._params = mean
 
 
 def test_up_osi():
-    env_name = 'DartHopperPT-v1'
+    #env_name = 'DartHopperPT-v1'
+    env_name = 'HopperPT-v2'
     num = 5
 
-    policy_net = get_up_network(env_name, num)
+    #policy_net = get_up_network(env_name, num)
+    policy_net = get_awr_network(env_name, num)
 
-    model = make_parallel(30, env_name, num=num, stochastic=False)
+    model = make_parallel(10, env_name, num=num, stochastic=False)
     env = make(env_name, num=num, resample_MP=True, stochastic=False)
 
     params = get_params(env)
@@ -207,22 +210,22 @@ def test_up_osi():
     set_params(env, [0.94107358, 0.77519005, 0.44055224, 0.9369426, -0.03846457])
     set_params(env, [0.05039606, 0.14680257, 0.56502066, 0.25723492, 0.73810709])
 
-    mean_params = policy_net.ob_rms.mean[-len(params):]
     mean_params = np.array([0.5] * len(params))
     osi = CEMOSI(model, mean_params,
         iter_num=20, num_mutation=100, num_elite=10, std=0.3)
     policy_net.set_params(mean_params)
 
 
-    online_osi(env, osi, policy_net, num_init_traj=1, max_horizon=15, eval_episodes=20, use_state=False, print_timestep=10000, resample_MP=True, online=0)
+    online_osi(env, osi, policy_net, num_init_traj=5, max_horizon=15, eval_episodes=30, use_state=False, print_timestep=10000, resample_MP=True, ensemble=1, online=0, gt=0)
 
 
 def test_cem_osi():
-    env_name = 'DartHopperPT-v1'
+    env_name = 'HopperPT-v3'
     num = 5
 
     from networks import get_td3_value
-    value_net = get_td3_value(env_name)
+    #value_net = get_td3_value(env_name)
+    value_net = None
 
     from policy import POLO, add_parser
     import argparse
@@ -230,14 +233,15 @@ def test_cem_osi():
     parser = argparse.ArgumentParser()
     add_parser(parser)
     args = parser.parse_args()
+    args.num_proc = 20
 
     model = make_parallel(args.num_proc, env_name, num=num, stochastic=True)
     env = make(env_name, num=num, resample_MP=True)
 
     #args.iter_num = 2
-    args.num_mutation = 200
+    args.num_mutation = 500
     #args.num_mutation = 100
-    args.iter_num = 2
+    args.iter_num = 5
     args.num_elite = 10
 
     policy_net = POLO(value_net, model, action_space=env.action_space,
@@ -264,14 +268,14 @@ def test_cem_osi():
     policy_net.set_params(mean_params)
     print(get_params(env))
 
-    online_osi(env, osi, policy_net, num_init_traj=1, max_horizon=15, eval_episodes=10, use_state=True, print_timestep=10, resample_MP=resample_MP, online=1)
+    online_osi(env, osi, policy_net, num_init_traj=1, max_horizon=15, eval_episodes=10, use_state=True, print_timestep=10, resample_MP=resample_MP, online=0, ensemble=5)
 
 
 def test_up_diff():
-    env_name = 'DartHopperPT-v1'
+    env_name = 'HopperPT-v2'
     num = 5
 
-    policy_net = get_up_network(env_name, num)
+    policy_net = get_awr_network(env_name, num)
 
     model = make_parallel(30, env_name, num=num, stochastic=False)
     env = make(env_name, num=num, resample_MP=True, stochastic=False)
@@ -282,17 +286,14 @@ def test_up_diff():
     set_params(env, [0.94107358, 0.77519005, 0.44055224, 0.9369426, -0.03846457])
     set_params(env, [0.05039606, 0.14680257, 0.56502066, 0.25723492, 0.73810709])
 
-    mean_params = policy_net.ob_rms.mean[-len(params):]
     mean_params = np.array([0.5] * len(params))
-    #osi = CEMOSI(model, mean_params,
-    #    iter_num=20, num_mutation=100, num_elite=10, std=0.3)
-    osi = DiffOSI(model, mean_params, 0.001, iter=100, momentum=0.9, eps=1e-5)
+    osi = DiffOSI(model, mean_params, 0.001, iter=100, momentum=0.9, eps=1e-3)
     policy_net.set_params(mean_params)
 
 
     # I run this at the last time..
     # online is very useful ..
-    online_osi(env, osi, policy_net, num_init_traj=1, max_horizon=15, eval_episodes=20, use_state=False, print_timestep=10000, resample_MP=True)
+    online_osi(env, osi, policy_net, num_init_traj=5, max_horizon=15, eval_episodes=20, use_state=False, print_timestep=10000, resample_MP=True, online=0)
     #osi_eval(env, osi, policy_net, num_init_traj=1, max_horizon=100, eval_episodes=10, use_state=False, print_timestep=10000, resample_MP=True)
 
 

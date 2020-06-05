@@ -83,3 +83,32 @@ def get_up_network(env_name, num):
     actor_critic.cuda()
     ob_rms = result[1]
     return UP(actor_critic, ob_rms)
+
+
+class UP2(UP):
+    def __init__(self, agent):
+        self.agent = agent
+        self.params = None
+
+    def set_params(self, params):
+        self.params = params
+
+    def __call__(self, ob):
+        if len(self.params.shape) == 1:
+            ob = np.concatenate((ob, self.params), axis=0)[None,:]
+        else:
+            ob = np.concatenate((np.tile(ob,(len(self.params), 1)), self.params), axis=1)
+        action = self.agent.act(ob, mode='test')
+        return action.mean(axis=0)
+
+    def reset(self):
+        pass
+
+
+def get_awr_network(env_name, num):
+    import torch
+    import sys
+    sys.path.append('awr2')
+    path = f'awr2/models/{env_name}'
+    agent = torch.load(path)
+    return UP2(agent)
