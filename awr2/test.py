@@ -90,10 +90,10 @@ def clip_networks(normalizer, critic, actor, params):
 def fine_tune():
     #env_name = 'HopperPT-v2'
     #num = 5
-    env_name = 'Walkek2dPT-v2'
+    env_name = 'Walker2dPT-v2'
     num = 8
-    env_name = 'HalfCheetahPT-v2'
-    num = 7
+    #env_name = 'HalfCheetahPT-v2'
+    #num = 7
 
     from envs import make
     from model import get_params, set_params
@@ -177,5 +177,5 @@ def fine_tune():
 
 
 if __name__ == '__main__':
-    test()
-    #fine_tune()
+    #test()
+    fine_tune()

@@ -158,7 +158,8 @@ def online_osi(eval_env, osi, policy, num_init_traj, max_horizon, eval_episodes,
         else:
             params = osi.find_min(ensemble, method='all') # get a good initialization
         policy.set_params(params)
-        print(params, get_params(eval_env))
+        #print(params, get_params(eval_env))
+        dist = np.linalg.norm((params - get_params(eval_env)), axis=-1)
 
         reward = 0
         obs, state = eval_env.reset(), get_state(eval_env)
@@ -215,4 +216,4 @@ def online_osi(eval_env, osi, policy, num_init_traj, max_horizon, eval_episodes,
     print("---------------------------------------")
     print(f"Evaluation over {eval_episodes} episodes: {np.mean(rewards):.3f},  std: {np.std(rewards)}")
     print("---------------------------------------")
-    return rewards
+    return rewards, dist
