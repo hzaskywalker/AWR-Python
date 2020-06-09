@@ -71,15 +71,17 @@ class Finetune:
             actor_lr = 0.0001 if env_name[0]!='W' else 0.000025
             activation = 'tanh' if env_name[0] == 'W' else 'relu'
 
-            self.awr = AWR(self.num_proc, make=make2, env_name=env_name, num_iter=0, device='cuda:0', replay_buffer_size=50000, path='tmp', optimizer='SGD', actor_lr = actor_lr, activation=activation)
+            self.awr = AWR(self.num_proc, make=make2, env_name=env_name, num_iter=0, device='cuda:0', replay_buffer_size=5000, path='tmp', optimizer='SGD', actor_lr = actor_lr, activation=activation)
 
         import copy
         agent2 = copy.deepcopy(self.agent)
         weights = clip_networks(agent2.normalizer, agent2.critic, agent2.actor, params.mean(axis=0))
 
+        mean, std = params.mean(axis=0), params.std(axis=0)
+        print('mean', mean, 'std', std)
         for idx, i in enumerate(self.awr.workers):
             i.copy(*weights)
-            i.set_env(params[idx%params.shape[0]])
+            i.set_env(mean, std)
             i.reset()
 
         self.awr.start(num_iter=self.num_iter, new_samples=2048, critic_update_steps=20, actor_update_steps=200, sync_weights=False)

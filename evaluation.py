@@ -140,7 +140,7 @@ def online_osi(eval_env, osi, policy, num_init_traj, max_horizon, eval_episodes,
 
     resample_MP_init = eval_env.env.resample_MP
     rewards = []
-    for episode in range(eval_episodes):
+    for episode in tqdm.trange(eval_episodes):
         osi.reset()
 
         eval_env.env.resample_MP = resample_MP
@@ -153,6 +153,7 @@ def online_osi(eval_env, osi, policy, num_init_traj, max_horizon, eval_episodes,
             osi.update(init_state, observations, actions, masks)
 
         #params = osi.get_params()
+        print('gt', get_params(eval_env))
         if gt:
             params = get_params(eval_env)
         else:
@@ -161,56 +162,58 @@ def online_osi(eval_env, osi, policy, num_init_traj, max_horizon, eval_episodes,
         #print(params, get_params(eval_env))
         dist = np.linalg.norm((params - get_params(eval_env)), axis=-1)
 
-        reward = 0
-        obs, state = eval_env.reset(), get_state(eval_env)
-        policy.reset()
+        total_rewards = []
+
+        for xx in range(5):
+            reward = 0
+            obs, state = eval_env.reset(), get_state(eval_env)
+            policy.reset()
+
+            states = []
+            observations = []
+            actions = []
+            states.append(states)
+
+            for i in range(1000):
+                if use_state:
+                    action = policy(state)
+                else:
+                    action = policy(obs)
+
+                obs, r, done, _ = eval_env.step(action)
+                state = get_state(eval_env)
+                states.append(state)
 
 
-        states = []
-        observations = []
-        actions = []
-        states.append(states)
+                observations.append(obs)
+                actions.append(action)
 
-        for i in tqdm.trange(1000):
-            if use_state:
-                action = policy(state)
-            else:
-                action = policy(obs)
+                if i % print_timestep == print_timestep - 1:
+                    print('\n\n', reward, "past: ", rewards[-10:], len(rewards), '\n\n')
 
-            obs, r, done, _ = eval_env.step(action)
-            state = get_state(eval_env)
-            states.append(state)
-
-
-            observations.append(obs)
-            actions.append(action)
-
-            if i % print_timestep == print_timestep - 1:
-                print('\n\n', reward, "past: ", rewards[-10:], len(rewards), '\n\n')
-
-            if i % max_horizon == max_horizon - 1 and i > max_horizon + 3 and online:
-                xx = i//max_horizon
-                if xx % online == online - 1:
-                    idx = i - max_horizon - 1
-                    osi.update(states[idx], observations[idx:idx+max_horizon], actions[idx:idx+max_horizon], 1, maxlen=3)
-                    tmp = osi.cem.iter_num
-                    #osi.cem.iter_num = 5 # we need at least 10 iterations??
-                    osi.cem.iter_num = 10 # we need at least 10 iterations??
-                    osi.cem.std = 0.1
-                    osi.cem.num_mutation = 100
-                    osi.cem.num_elite = 5
-                    params = params * 0.5 + osi.get_params() * 0.5 # don't know if this is ok
-                    policy.set_params(params)
-                print(params, get_params(eval_env))
-                print('\n\n', reward, "past: ", rewards[-10:], len(rewards), '\n\n')
+                if i % max_horizon == max_horizon - 1 and i > max_horizon + 3 and online:
+                    xx = i//max_horizon
+                    if xx % online == online - 1:
+                        idx = i - max_horizon - 1
+                        osi.update(states[idx], observations[idx:idx+max_horizon], actions[idx:idx+max_horizon], 1, maxlen=3)
+                        tmp = osi.cem.iter_num
+                        #osi.cem.iter_num = 5 # we need at least 10 iterations??
+                        osi.cem.iter_num = 10 # we need at least 10 iterations??
+                        osi.cem.std = 0.1
+                        osi.cem.num_mutation = 100
+                        osi.cem.num_elite = 5
+                        params = params * 0.5 + osi.get_params() * 0.5 # don't know if this is ok
+                        policy.set_params(params)
+                    print(params, get_params(eval_env))
+                    print('\n\n', reward, "past: ", rewards[-10:], len(rewards), '\n\n')
 
 
-            reward += r
-            #if i % print_timestep == print_timestep-1 or done:
-            #    print('\n\n', reward, "past: ", rewards[-10:], len(rewards), '\n\n')
-            if done:
-                break
-        rewards.append(reward)
+                reward += r
+                #if i % print_timestep == print_timestep-1 or done:
+                #    print('\n\n', reward, "past: ", rewards[-10:], len(rewards), '\n\n')
+                if done:
+                    break
+            rewards.append(reward)
 
 
     print("---------------------------------------")

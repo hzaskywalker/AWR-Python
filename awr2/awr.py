@@ -286,6 +286,18 @@ class Worker(multiprocessing.Process):
         episode = 0
         optim_iter = 0
 
+        params = params_std = None
+
+        def reset_env():
+            obs = env.reset()
+            if params is not None:
+                x = params.copy()
+                if params_std is not None:
+                    x += params_std * np.random.normal(size=params_std.shape)
+                from model import set_params
+                set_params(env, x.clip(0, 1.05))
+            return obs
+
         while True:
             op, data = self.worker_pipe.recv()
             if op == self.EXIT:
@@ -302,7 +314,7 @@ class Worker(multiprocessing.Process):
                 new_samples, critic_steps, actor_steps = data
 
                 # new rollout
-                obs = env.reset()
+                obs = reset_env()
 
                 episodes = []
                 episode_reward = 0
@@ -333,7 +345,7 @@ class Worker(multiprocessing.Process):
 
                         if num >= new_samples:
                             break
-                        obs = env.reset()
+                        obs = reset_env()
                         episode_reward=0
 
                 optim_iter += 1
@@ -351,7 +363,7 @@ class Worker(multiprocessing.Process):
                 self.worker_pipe.send("FINISH ONE ITER")
 
                 if self.is_primary and optim_iter % 10 == 1:
-                    obs = env.reset()
+                    obs = reset_env()
                     reward = 0
                     while True:
                         action = agent.act(obs[None,:], mode='test')[0]
@@ -368,8 +380,7 @@ class Worker(multiprocessing.Process):
                 action = agent.act(*data)
                 self.worker_pipe.send(action)
             elif op == self.SET_ENV:
-                from model import set_params
-                set_params(env, data)
+                params, params_std = data
             elif op == self.GET_PARAM:
                 self.worker_pipe.send(agent.get_params())
             elif op == self.SET_PARAM:
@@ -397,8 +408,8 @@ class Worker(multiprocessing.Process):
         self.pipe.send([self.ASK, [obs, mode]])
         return self.pipe.recv()
 
-    def set_env(self, params):
-        self.pipe.send([self.SET_ENV, params])
+    def set_env(self, params, params_std=None):
+        self.pipe.send([self.SET_ENV, [params, params_std]])
 
     def reset(self):
         self.pipe.send([self.RESET, None])
